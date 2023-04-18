@@ -48,7 +48,7 @@ func (c *Card) String() string {
 
 func NewCard(s string) (*Card, error) {
 	var c Card
-	c.digits = make([]int, 0, len(s))
+	c.digits = make([]int, 0, 19)
 	for _, r := range s {
 		if '0' <= r && r <= '9' {
 			c.digits = append(c.digits, int(r)-'0')
