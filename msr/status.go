@@ -6,12 +6,12 @@ import (
 )
 
 const (
-	StatusOK            byte = '0'
-	StatusReadWriteErr  byte = '1'
-	StatusCommandFmtErr byte = '2'
-	StatusCommandErr    byte = '4'
-	StatusWriteSwipeErr byte = '9'
-	StatusFail          byte = 'A'
+	statusOK            byte = '0'
+	statusReadWriteErr  byte = '1'
+	statusCommandFmtErr byte = '2'
+	statusCommandErr    byte = '4'
+	statusWriteSwipeErr byte = '9'
+	statusFail          byte = 'A'
 )
 
 var (
@@ -24,17 +24,17 @@ var (
 
 func statusErr(b byte) error {
 	switch b {
-	case StatusOK:
+	case statusOK:
 		return nil
-	case StatusReadWriteErr:
+	case statusReadWriteErr:
 		return ErrReadWrite
-	case StatusCommandFmtErr:
+	case statusCommandFmtErr:
 		return ErrInvalidCommandFmt
-	case StatusCommandErr:
+	case statusCommandErr:
 		return ErrInvalidCommand
-	case StatusWriteSwipeErr:
+	case statusWriteSwipeErr:
 		return ErrWriteSwipe
-	case StatusFail:
+	case statusFail:
 		return ErrFail
 	}
 	return fmt.Errorf("unknown status byte %X", b)
