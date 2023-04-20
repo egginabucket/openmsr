@@ -47,7 +47,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
+	b, err = d.ReadRawTracks()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Raw data:", string(b))
+	b, _ = msr.HexToChar(b, 7, true)
+	fmt.Println("Converted", string(b))
 	b, err = d.ReadISOTracks()
 	if err != nil {
 		panic(err)
