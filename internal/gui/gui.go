@@ -3,7 +3,6 @@ package gui
 import (
 	"github.com/andlabs/ui"
 	_ "github.com/andlabs/ui/winmanifest"
-	"github.com/egginabucket/openmsr/gui/tracks"
 )
 
 var mainwin *ui.Window
@@ -70,7 +69,7 @@ func makeNumbersPage() ui.Control {
 	vbox.Append(slider, false)
 	vbox.Append(pbar, false)
 
-	track := tracks.NewTrack(1)
+	//track := tracks.NewTrack(1)
 
 	ip := ui.NewProgressBar()
 	ip.SetValue(-1)
@@ -101,8 +100,8 @@ func makeNumbersPage() ui.Control {
 	rb.Append("Radio Button 2")
 	rb.Append("Radio Button 3")
 	vbox.Append(rb, false)
-	track.SetPreset(tracks.PresetISO)
-	vbox.Append(track.Box, false)
+	//track.SetPreset(tracks.PresetISO)
+	//vbox.Append(track.Box, false)
 
 	return hbox
 }
@@ -193,7 +192,7 @@ func makeDataChoosersPage() ui.Control {
 	return hbox
 }
 
-func setupUI() {
+func SetupUI() {
 	mainwin = ui.NewWindow("libui Control Gallery", 640, 480, true)
 	mainwin.OnClosing(func(*ui.Window) bool {
 		ui.Quit()
@@ -207,7 +206,7 @@ func setupUI() {
 	tab := ui.NewTab()
 	mainwin.SetChild(tab)
 	mainwin.SetMargined(true)
-	tab.Append("MSR", MakeMainUI())
+	tab.Append("MSR", MakeMainUI(mainwin))
 	tab.SetMargined(0, true)
 
 	tab.Append("Basic Controls", makeBasicControlsPage())
@@ -220,8 +219,4 @@ func setupUI() {
 	tab.SetMargined(3, true)
 
 	mainwin.Show()
-}
-
-func main() {
-	ui.Main(setupUI)
 }

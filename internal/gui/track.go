@@ -1,9 +1,10 @@
-package tracks
+package gui
 
 import (
 	"fmt"
 
 	"github.com/andlabs/ui"
+	"github.com/egginabucket/openmsr/pkg/libmsr"
 )
 
 const minBPC = 4
@@ -38,13 +39,14 @@ type Track struct {
 	num int
 	//bitsPerInch int
 	//bitsPerChar int
+	enableCB *ui.Checkbox
 	bpiCB    *ui.Combobox
 	bpcCB    *ui.Combobox
 	parityCB *ui.Combobox
 	disabled bool
 	//evenParity bool
 	//data       []byte
-	Box *ui.Box
+	box *ui.Box
 	//cb       *ui.Checkbox
 	edit *ui.Entry
 }
@@ -58,10 +60,6 @@ func (t *Track) controls() []ui.Control {
 	}
 }
 
-func (t *Track) IsDisabled() bool {
-	return t.disabled
-}
-
 func (t *Track) onToggle(cb *ui.Checkbox) {
 	t.disabled = !cb.Checked()
 	for _, c := range t.controls() {
@@ -73,7 +71,7 @@ func (t *Track) onToggle(cb *ui.Checkbox) {
 	}
 }
 
-func (t *Track) SetPreset(p Preset) {
+func (t *Track) setPreset(p Preset) {
 	switch p {
 	case PresetISO:
 		switch t.num {
@@ -88,15 +86,76 @@ func (t *Track) SetPreset(p Preset) {
 			t.bpcCB.SetSelected(5 - minBPC)
 		}
 		t.parityCB.SetSelected(parityOdd)
+	case PresetAAMVA:
+		switch t.num {
+		case 1:
+			t.bpiCB.SetSelected(bpi210)
+			t.bpcCB.SetSelected(7 - minBPC)
+		case 2:
+			t.bpiCB.SetSelected(bpi75)
+			t.bpcCB.SetSelected(5 - minBPC)
+		case 3:
+			t.bpiCB.SetSelected(bpi210)
+			t.bpcCB.SetSelected(7 - minBPC)
+		}
+		t.parityCB.SetSelected(parityOdd)
+	}
+	t.checkEdit()
+}
+
+func (t *Track) bpc() int {
+	return minBPC + t.bpcCB.Selected()
+}
+
+func (t *Track) charOffset() byte {
+	switch t.bpc() {
+	case 4, 5:
+		return '0'
+	case 6, 7:
+		return ' '
+	}
+	return ' '
+}
+
+func (t *Track) parityEven() bool {
+	return t.parityCB.Selected() == parityEven
+}
+
+func (t *Track) decode(raw []byte) (chars []byte, parityOK []bool, lrcOK bool) {
+	return libmsr.DecodeRaw(raw, t.charOffset(), t.bpc(), 8, t.parityEven())
+}
+
+func (t *Track) encode(chars []byte) []byte {
+	return libmsr.EncodeRaw(chars, t.charOffset(), t.bpc(), 8, t.parityEven())
+}
+
+func (t *Track) checkEdit() {
+	text := t.edit.Text()
+	b := make([]byte, 0, len(text))
+	min := rune(t.charOffset())
+	max := min + (1 << rune(t.bpc()))
+	changed := false
+	for _, r := range text {
+		if r < min || r > max {
+			if max >= 'Z' && r >= 'a' && r <= 'z' {
+				b = append(b, byte(r-('a'-'A')))
+			}
+			changed = true
+		} else {
+			b = append(b, byte(r))
+		}
+	}
+	if changed {
+		t.edit.SetText(string(b))
 	}
 }
 
-func (t *Track) Decode(d []byte) string {
-	return ""
+func (t *Track) onEdit(e *ui.Entry) {
+	t.checkEdit()
 }
 
-func (t *Track) Encode(s string) []byte {
-	return nil
+func (t *Track) onBPCChange(cb *ui.Combobox) {
+	t.checkEdit()
 }
 
 /*
@@ -118,21 +177,21 @@ func (t *Track) onBPCSelected(cb *ui.Combobox) {
 }
 */
 
-func NewTrack(num int) *Track {
+func newTrack(num int) *Track {
 	if num < 1 || num > 3 {
 		panic("invalid track num")
 	}
 	var t Track
 	t.num = num
 	vbox := ui.NewVerticalBox()
-	vbox.SetPadded(true)
+	//vbox.SetPadded(false)
 	hbox := ui.NewHorizontalBox()
 	//hbox.SetPadded(true)
 
-	cb := ui.NewCheckbox(fmt.Sprintf("Track %d", t.num))
-	cb.SetChecked(true)
-	cb.OnToggled(t.onToggle)
-	hbox.Append(cb, true)
+	t.enableCB = ui.NewCheckbox(fmt.Sprintf("Track %d", t.num))
+	t.enableCB.SetChecked(true)
+	t.enableCB.OnToggled(t.onToggle)
+	hbox.Append(t.enableCB, true)
 
 	t.bpiCB = ui.NewCombobox()
 	t.bpiCB.Append("210 bits per inch")
@@ -141,6 +200,7 @@ func NewTrack(num int) *Track {
 	for bpc := minBPC; bpc <= 7; bpc++ {
 		t.bpcCB.Append(fmt.Sprintf("%d bits per char", bpc))
 	}
+	t.bpcCB.OnSelected(t.onBPCChange)
 	t.parityCB = ui.NewCombobox()
 	t.parityCB.Append("Odd parity")
 	t.parityCB.Append("Even parity")
@@ -151,8 +211,9 @@ func NewTrack(num int) *Track {
 	//t.bpiCB.OnSelected(t.onBPISelected)
 
 	t.edit = ui.NewEntry()
-	vbox.Append(t.edit, false)
+	t.edit.OnChanged(t.onEdit)
 	vbox.Append(hbox, false)
-	t.Box = vbox
+	vbox.Append(t.edit, false)
+	t.box = vbox
 	return &t
 }

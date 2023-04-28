@@ -1,16 +1,15 @@
-package msr
+package libmsr
 
 import (
 	"bytes"
 	"errors"
 )
 
-//const esc byte = 0x1B
-
 const (
 	seqStartBit byte = 1 << 7
 	seqEndBit   byte = 1 << 6
 	escByte     byte = 0x1B
+	fsByte      byte = 0x1C
 )
 
 func esc(data ...byte) []byte {
@@ -21,20 +20,23 @@ func esc(data ...byte) []byte {
 }
 
 func makePackets(msg []byte) [][]byte {
-	pkts := make([][]byte, 0, len(msg)/63+1)
-	for i := 0; i < len(msg); i += 63 {
+	n := len(msg) / 63
+	if len(msg)%63 != 0 {
+		n++
+	}
+	pkts := make([][]byte, n)
+	for i := range pkts {
 		pkt := make([]byte, 64)
 		if i == 0 {
 			pkt[0] |= seqStartBit
 		}
-		if i+63 >= len(msg) {
+		if i == n-1 {
 			pkt[0] |= seqEndBit | byte(len(msg[i:]))
-			copy(pkt[1:], msg[i:])
 		} else {
 			pkt[0] |= 63
-			copy(pkt[1:], msg[i:i+63])
 		}
-		pkts = append(pkts, pkt)
+		copy(pkt[1:], msg[i*63:])
+		pkts[i] = pkt
 	}
 	return pkts
 }
@@ -59,8 +61,10 @@ func parsePackets(pkts [][]byte) ([]byte, error) {
 
 func decode(msg []byte) (data, result []byte, err error) {
 	escI := bytes.LastIndexByte(msg, escByte)
-	err = statusErr(msg[escI+1])
-	if err != nil {
+	err = Status(msg[escI+1])
+	if err == StatusOK {
+		err = nil
+	} else {
 		return
 	}
 	data, result = msg[:escI], msg[escI+2:]
@@ -74,20 +78,41 @@ func encodeTrack(data []byte, num int) []byte {
 	return append(esc(byte(num), byte(len(data))), data...)
 }
 
-func encodeRaw(tracks ...[]byte) []byte {
+func encodeRawTracks(tracks ...[]byte) []byte {
 	data := esc('s')
 	for i, t := range tracks {
-		if len(t) > 0 {
+		if true || len(t) > 0 { // TODO
 			data = append(data, encodeTrack(t, i+1)...)
 		}
 	}
-	return append(data, '?', 0x1C)
+	return append(data, '?', fsByte)
 }
 
-func encodeISO(t1, t2, t3 []byte) []byte {
+func encodeISOTracks(t1, t2, t3 []byte) []byte {
 	data := esc('s')
 	data = append(data, encodeTrack(t1, 1)...)
 	data = append(data, encodeTrack(t2, 2)...)
 	data = append(data, encodeTrack(t3, 3)...)
-	return append(data, '?', 0x1C)
+	return append(data, '?', fsByte)
+}
+
+func decodeTracks(data []byte) ([3][]byte, error) {
+	var tracks [3][]byte
+	if data[0] != escByte || data[1] != 's' {
+		return tracks, errors.New("invalid track block start")
+	}
+	data = data[2:]
+	for i := 0; i < 3; i++ {
+		if data[0] != escByte || data[1] != byte(i+1) {
+			return tracks, errors.New("invalid track data")
+		}
+		trackLen := int(data[2])
+		data = data[3:]
+		tracks[i] = data[:trackLen]
+		data = data[trackLen:]
+	}
+	if data[0] != '?' || data[1] != fsByte {
+		return tracks, errors.New("invalid track block end")
+	}
+	return tracks, nil
 }
