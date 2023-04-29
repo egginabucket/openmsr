@@ -23,6 +23,7 @@ const (
 type App struct {
 	device         *libmsr.Device
 	win            *ui.Window
+	trackBox       *ui.Box
 	presetRadio    *ui.RadioButtons
 	coRadio        *ui.RadioButtons
 	infoTypeCB     *ui.Combobox
@@ -79,14 +80,7 @@ func (a *App) setFrozen(f bool) {
 	for _, c := range a.controls() {
 		fn(c)
 	}
-	for _, t := range a.tracks {
-		fn(t.enableCB)
-		if !t.disabled {
-			for _, c := range t.controls() {
-				fn(c)
-			}
-		}
-	}
+	fn(a.trackBox)
 }
 
 func (a *App) freeze() {
@@ -152,11 +146,6 @@ func (a *App) erase() {
 	err := a.device.Erase(tracks[0], tracks[1], tracks[2])
 	if err != nil {
 		a.throwErr(err)
-	}
-	for i, t := range tracks {
-		if t {
-			a.tracks[i].edit.SetText("")
-		}
 	}
 }
 
@@ -225,11 +214,11 @@ func MakeMainUI(win *ui.Window) ui.Control {
 	vBox := ui.NewVerticalBox()
 	hBox := ui.NewHorizontalBox()
 	hBox.SetPadded(true)
-	trackBox := ui.NewVerticalBox()
-	trackBox.SetPadded(true)
+	a.trackBox = ui.NewVerticalBox()
+	a.trackBox.SetPadded(true)
 	for i := 0; i < 3; i++ {
 		t := newTrack(i + 1)
-		trackBox.Append(t.box, false)
+		a.trackBox.Append(t.box, false)
 		a.tracks[i] = t
 	}
 
@@ -294,7 +283,7 @@ func MakeMainUI(win *ui.Window) ui.Control {
 	vBox.Append(buttonBox, false)
 
 	hBox.Append(sideMenu, false)
-	hBox.Append(trackBox, true)
+	hBox.Append(a.trackBox, true)
 
 	a.selectPreset(a.presetRadio)
 	//a.setFrozen(true)

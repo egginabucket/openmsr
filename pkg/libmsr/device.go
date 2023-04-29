@@ -145,22 +145,20 @@ func (d *Device) SetHiCo() error {
 	return d.sendAndCheck(esc('y'), false)
 }
 
+// TODO
 func (d *Device) IsHiCo() (bool, error) {
-	err := d.send(esc('d'))
+	msg, err := d.sendAndReceive(esc('d'), false)
 	if err != nil {
 		return false, err
 	}
-	msg, err := d.receive(false)
-	if err != nil {
-		return false, err
-	}
-	switch msg[0] {
-	case 'H':
+	switch msg[1] {
+	case 'H', 'h':
 		return true, nil
-	case 'L':
+	case 'L', 'l':
 		return false, nil
 	}
-	return false, fmt.Errorf("unkown response %X", msg[0])
+	fmt.Println(msg)
+	return false, fmt.Errorf("unknown response %X", msg[1])
 }
 
 func (d *Device) SetBitsPerInch(t1, t2, t3 int) error {
