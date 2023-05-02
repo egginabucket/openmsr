@@ -20,9 +20,16 @@ const (
 	infoAAMVA
 )
 
+const (
+	connNone = iota
+	connHID
+	connRaw
+)
+
 type App struct {
 	device         *libmsr.Device
 	win            *ui.Window
+	connCB         *ui.RadioButtons
 	presetRadio    *ui.RadioButtons
 	coRadio        *ui.RadioButtons
 	infoTypeCB     *ui.Combobox
@@ -37,8 +44,20 @@ type App struct {
 	mu sync.Mutex
 }
 
+func enableDisable(m bool) func(ui.Control) {
+	if m {
+		return func(c ui.Control) { c.Enable() }
+	} else {
+		return func(c ui.Control) { c.Disable() }
+	}
+}
+
 func (a *App) throwErr(err error) {
-	ui.MsgBoxError(a.win, "Error", err.Error())
+	if err == usb.ErrDeviceClosed {
+
+	} else {
+		ui.MsgBoxError(a.win, "Error", err.Error())
+	}
 }
 
 func (a *App) selectPreset(r *ui.RadioButtons) {
@@ -65,17 +84,19 @@ func (a *App) deviceControls() []ui.Control {
 	}
 }
 
+func (a *App) setDeviceAble(m bool) {
+	fn := enableDisable(m)
+	for _, c := range a.deviceControls() {
+		fn(c)
+	}
+}
+
 func (a *App) controls() []ui.Control {
 	return append(a.deviceControls(), a.openButton, a.saveButton)
 }
 
 func (a *App) setFrozen(f bool) {
-	var fn func(c ui.Control)
-	if f {
-		fn = func(c ui.Control) { c.Disable() }
-	} else {
-		fn = func(c ui.Control) { c.Enable() }
-	}
+	fn := enableDisable(!f)
 	for _, c := range a.controls() {
 		fn(c)
 	}
@@ -236,6 +257,11 @@ func MakeMainUI(win *ui.Window) ui.Control {
 	sideMenu := ui.NewVerticalBox()
 	sideMenu.SetPadded(true)
 	//sideForm := ui.NewForm()
+	connectionCB := ui.NewCombobox()
+	connectionCB.Append("MSR605X (HID)")
+	connectionCB.Append("Disconnected")
+	connectionCB.Append("MSR605 (Raw)")
+	connectionCB.SetSelected(connHID)
 	a.coRadio = ui.NewRadioButtons()
 	a.coRadio.Append("Hi-Co")
 	a.coRadio.Append("Lo-Co")
