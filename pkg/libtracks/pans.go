@@ -5,10 +5,12 @@ import (
 	"unicode"
 )
 
+// Primary account number (eg. credit card number), 1-19 digits
 type PAN struct {
 	digits []int
 }
 
+// MII returns the major industry identifier, identified from the first digit.
 func (n *PAN) MII() string {
 	const future = " and other future industry assigments"
 	switch n.digits[0] {
@@ -51,10 +53,12 @@ func (n *PAN) checksum(shift bool) int {
 	return sum % 10
 }
 
+// IsLuhnValid checks against accidental errors with the Luhn algorithm.
 func (n *PAN) IsLuhnValid() bool {
 	return n.checksum(true) == 0
 }
 
+// WriteLRC writes a longitudinal redundancy check digit calculated with the Luhn alg.
 func (n *PAN) WriteLRC() {
 	n.digits = append(n.digits, (10-n.checksum(false))%10)
 }
@@ -93,7 +97,7 @@ func NewPAN(s string) (PAN, error) {
 		}
 	}
 	if n.Len() < 1 {
-		return n, errors.New("empty card")
+		return n, errors.New("libtracks.NewPAN: no data")
 	}
 	return n, nil
 }

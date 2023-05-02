@@ -35,7 +35,8 @@ type App struct {
 	eraseButton,
 	openButton,
 	saveButton *ui.Button
-	mu sync.Mutex
+	progBar *ui.ProgressBar
+	mu      sync.Mutex
 }
 
 func (a *App) throwErr(err error) {
@@ -85,11 +86,13 @@ func (a *App) setFrozen(f bool) {
 
 func (a *App) freeze() {
 	a.mu.Lock()
+	a.progBar.Show()
 	a.setFrozen(true)
 }
 
 func (a *App) unfreeze() {
 	a.setFrozen(false)
+	a.progBar.Hide()
 	a.mu.Unlock()
 }
 
@@ -212,6 +215,7 @@ func MakeMainUI(win *ui.Window) ui.Control {
 	}
 	a.device = libmsr.NewDevice(hid)
 	vBox := ui.NewVerticalBox()
+	vBox.SetPadded(true)
 	hBox := ui.NewHorizontalBox()
 	hBox.SetPadded(true)
 	a.trackBox = ui.NewVerticalBox()
@@ -280,6 +284,10 @@ func MakeMainUI(win *ui.Window) ui.Control {
 	buttonBox.Append(a.resetButton, true)
 	buttonBox.Append(a.openButton, false)
 	buttonBox.Append(a.saveButton, false)
+	a.progBar = ui.NewProgressBar()
+	a.progBar.Hide()
+	a.progBar.SetValue(-1)
+	vBox.Append(a.progBar, false)
 	vBox.Append(buttonBox, false)
 
 	hBox.Append(sideMenu, false)

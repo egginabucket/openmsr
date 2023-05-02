@@ -13,13 +13,13 @@ import (
 
 type (
 	AAMVATrack1 struct {
-		StateOrProv string //[2]byte
-		City        string
+		StateOrProv string // A-Z x2
+		City        string // up to 13 chars
 		Name        []string
 		Address     []string
 	}
 	AAMVATrack2 struct {
-		IIN           byte
+		IIN           byte   // ISO issuer identification number
 		ID            string // includes overflow
 		ExpDate       time.Time
 		NonExp        bool
@@ -28,17 +28,17 @@ type (
 		BirthDate     time.Time
 	}
 	AAMVATrack3 struct {
-		CDSVersion    int
-		JdxVersion    byte
-		PostalCode    string //[11]byte
-		Class         string //[2]byte
-		Restrictions  string //[10]byte
-		Endorsements  string //[4]byte
+		CDSVersion    int  // should be 0, may change with format in the future
+		JdxVersion    byte //jurisdiction version
+		PostalCode    string
+		Class         string // len 2
+		Restrictions  string // len 10
+		Endorsements  string // len 4
 		Sex           aamvad20.Sex
 		Height        *aamvad20.Height
-		Weight        int
-		HairColor     aamvad20.HairColor //[3]byte
-		EyeColor      aamvad20.EyeColor  //[3]byte
+		Weight        int // lb or kg
+		HairColor     aamvad20.HairColor
+		EyeColor      aamvad20.EyeColor
 		Discretionary string
 	}
 	AAMVATracks struct {
@@ -55,10 +55,9 @@ const (
 	birthDateLayout  = "20060102"
 )
 
-// ^%([A-Z]{2})([^\^]{1,12}\^|[^\^]{13})([^\^]{1,34}\^|[^\^]{35})([^\^]{1,28}\^|[^\^]{29})\?$
-var AAMVATrack1Re = regexp.MustCompile(`^%([A-Z]{2})([^\^]{2,12}\^|[^\^]{13})([^\^]{2,34}\^|[^\^]{35})([^\^]{2,28}\^|[^\^]{29,})\?$`)
-var AAMVATrack2Re = regexp.MustCompile(`^;([0-9])([0-9]{1,13})=([0-9]{4})([0-9]{8})([0-9]{1,5}|=)\?$`)
-var AAMVATrack3Re = regexp.MustCompile(`^%([0-9])(.)([A-Z0-9 ]{11})([A-Z0-9 ]{2})([A-Z0-9 ]{10})([A-Z0-9 ]{4})([A-Z0-9])([0-9]{3}|   )([0-9 ]{3}|   )([A-Z]{3}|   )([A-Z]{3}|   )([^\?]+)\?$`)
+var aamvaTrack1Re = regexp.MustCompile(`^%([A-Z]{2})([^\^]{2,12}\^|[^\^]{13})([^\^]{2,34}\^|[^\^]{35})([^\^]{2,28}\^|[^\^]{29,})\?$`)
+var aamvaTrack2Re = regexp.MustCompile(`^;([0-9])([0-9]{1,13})=([0-9]{4})([0-9]{8})([0-9]{1,5}|=)\?$`)
+var aamvaTrack3Re = regexp.MustCompile(`^%([0-9])(.)([A-Z0-9 ]{11})([A-Z0-9 ]{2})([A-Z0-9 ]{10})([A-Z0-9 ]{4})([A-Z0-9])([0-9]{3}|   )([0-9 ]{3}|   )([A-Z]{3}|   )([A-Z]{3}|   )([^\?]+)\?$`)
 
 func (t *AAMVATrack1) String() string {
 	var b strings.Builder
@@ -196,9 +195,9 @@ func (t *AAMVATrack3) Info() *Info {
 }
 
 func NewAAMVATrack1(s string) (*AAMVATrack1, error) {
-	groups := AAMVATrack1Re.FindStringSubmatch(s)
+	groups := aamvaTrack1Re.FindStringSubmatch(s)
 	if groups == nil {
-		return nil, errors.New("invalid AAMVA track 1")
+		return nil, errors.New("libtracks.NewAAMVATrack1: no match")
 	}
 	var t AAMVATrack1
 	t.StateOrProv = groups[1]
@@ -210,9 +209,9 @@ func NewAAMVATrack1(s string) (*AAMVATrack1, error) {
 
 func NewAAMVATrack2(s string) (*AAMVATrack2, error) {
 	var err error
-	groups := AAMVATrack2Re.FindStringSubmatch(s)
+	groups := aamvaTrack2Re.FindStringSubmatch(s)
 	if groups == nil {
-		return nil, errors.New("invalid AAMVA track 2")
+		return nil, errors.New("libtracks.NewAAMVATrack2: no match")
 	}
 	var t AAMVATrack2
 	t.IIN = groups[1][0]
@@ -249,9 +248,9 @@ func NewAAMVATrack2(s string) (*AAMVATrack2, error) {
 
 func NewAAMVATrack3(s string) (*AAMVATrack3, error) {
 	var err error
-	groups := AAMVATrack3Re.FindStringSubmatch(s)
+	groups := aamvaTrack3Re.FindStringSubmatch(s)
 	if groups == nil {
-		return nil, errors.New("invalid AAMVA track 3")
+		return nil, errors.New("libtracks.NewAAMVATrack3: no match")
 	}
 	var t AAMVATrack3
 	t.CDSVersion = int(groups[1][0] - '0')
