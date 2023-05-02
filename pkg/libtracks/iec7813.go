@@ -103,7 +103,7 @@ func NewIEC7813Track1(s string) (*IEC7813Track1, error) {
 	var err error
 	groups := iec7813Track1Re.FindStringSubmatch(s)
 	if groups == nil {
-		return nil, errors.New("invalid IEC 7813 track 1")
+		return nil, errors.New("libtracks.NewIEC7813Track1: no match")
 	}
 	var t IEC7813Track1
 	t.PAN, err = NewPAN(groups[1])
@@ -129,7 +129,7 @@ func NewIEC7813Track2(s string) (*IEC7813Track2, error) {
 	var err error
 	groups := iec7813Track2Re.FindStringSubmatch(s)
 	if groups == nil {
-		return nil, errors.New("invalid IEC 7813 track 2")
+		return nil, errors.New("libtracks.NewIEC7813Track2: no match")
 	}
 	var t IEC7813Track2
 	t.PAN, err = NewPAN(groups[1])

@@ -4,6 +4,8 @@ import (
 	"fmt"
 )
 
+// Status represents a status byte returned by the device.
+// It implements the error interface.
 type Status byte
 
 const (
@@ -16,7 +18,7 @@ const (
 )
 
 func (s Status) Error() string {
-	const pre = "MSR status: "
+	const pre = "libmsr.Status: "
 	switch s {
 	case StatusOK:
 		return ""

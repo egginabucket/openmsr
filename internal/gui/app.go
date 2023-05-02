@@ -29,7 +29,11 @@ const (
 type App struct {
 	device         *libmsr.Device
 	win            *ui.Window
+<<<<<<< HEAD
 	connCB         *ui.RadioButtons
+=======
+	trackBox       *ui.Box
+>>>>>>> 8e85deaa9a8b183064fac413fe57a05d5c0b1af0
 	presetRadio    *ui.RadioButtons
 	coRadio        *ui.RadioButtons
 	infoTypeCB     *ui.Combobox
@@ -41,7 +45,8 @@ type App struct {
 	eraseButton,
 	openButton,
 	saveButton *ui.Button
-	mu sync.Mutex
+	progBar *ui.ProgressBar
+	mu      sync.Mutex
 }
 
 func enableDisable(m bool) func(ui.Control) {
@@ -100,23 +105,18 @@ func (a *App) setFrozen(f bool) {
 	for _, c := range a.controls() {
 		fn(c)
 	}
-	for _, t := range a.tracks {
-		fn(t.enableCB)
-		if !t.disabled {
-			for _, c := range t.controls() {
-				fn(c)
-			}
-		}
-	}
+	fn(a.trackBox)
 }
 
 func (a *App) freeze() {
 	a.mu.Lock()
+	a.progBar.Show()
 	a.setFrozen(true)
 }
 
 func (a *App) unfreeze() {
 	a.setFrozen(false)
+	a.progBar.Hide()
 	a.mu.Unlock()
 }
 
@@ -173,11 +173,6 @@ func (a *App) erase() {
 	err := a.device.Erase(tracks[0], tracks[1], tracks[2])
 	if err != nil {
 		a.throwErr(err)
-	}
-	for i, t := range tracks {
-		if t {
-			a.tracks[i].edit.SetText("")
-		}
 	}
 }
 
@@ -244,13 +239,14 @@ func MakeMainUI(win *ui.Window) ui.Control {
 	}
 	a.device = libmsr.NewDevice(hid)
 	vBox := ui.NewVerticalBox()
+	vBox.SetPadded(true)
 	hBox := ui.NewHorizontalBox()
 	hBox.SetPadded(true)
-	trackBox := ui.NewVerticalBox()
-	trackBox.SetPadded(true)
+	a.trackBox = ui.NewVerticalBox()
+	a.trackBox.SetPadded(true)
 	for i := 0; i < 3; i++ {
 		t := newTrack(i + 1)
-		trackBox.Append(t.box, false)
+		a.trackBox.Append(t.box, false)
 		a.tracks[i] = t
 	}
 
@@ -317,10 +313,14 @@ func MakeMainUI(win *ui.Window) ui.Control {
 	buttonBox.Append(a.resetButton, true)
 	buttonBox.Append(a.openButton, false)
 	buttonBox.Append(a.saveButton, false)
+	a.progBar = ui.NewProgressBar()
+	a.progBar.Hide()
+	a.progBar.SetValue(-1)
+	vBox.Append(a.progBar, false)
 	vBox.Append(buttonBox, false)
 
 	hBox.Append(sideMenu, false)
-	hBox.Append(trackBox, true)
+	hBox.Append(a.trackBox, true)
 
 	a.selectPreset(a.presetRadio)
 	//a.setFrozen(true)

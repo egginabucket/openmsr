@@ -10,8 +10,7 @@ import (
 )
 
 type Device struct {
-	device usb.Device
-	//bpc          [3]int
+	device       usb.Device
 	PreSendDelay time.Duration
 	CheckTimeout,
 	SwipeTimeout time.Duration
@@ -114,6 +113,7 @@ func (d *Device) sendAndCheck(msg []byte, swipeWait bool) error {
 	return err
 }
 
+// TestCommunication verifies the connection with the device.
 func (d *Device) TestCommunication() error {
 	err := d.send(esc('e'))
 	if err != nil {
@@ -124,47 +124,50 @@ func (d *Device) TestCommunication() error {
 		return err
 	}
 	if msg[0] != escByte || msg[1] != 'y' {
-		return errors.New("unknown response")
+		return errors.New("libmsr.Device.TestCommunication: unknown response")
 	}
 	return nil
 }
 
+// TestSensor verifies that the device's card sensing circuit is working.
+// Does not return until a card is sensed or d.SwipeTimeout is reached.
 func (d *Device) TestSensor() error {
 	return d.sendAndCheck(esc(0x86), true)
 }
 
+// TestRAM verifies that the device's onboard RAM is working.
 func (d *Device) TestRAM() error {
 	return d.sendAndCheck(esc(0x87), false)
 }
 
+// SetLoCo sets the device to write Lo-Co cards.
 func (d *Device) SetLoCo() error {
 	return d.sendAndCheck(esc('x'), false)
 }
 
+// SetHiCo sets the device to write Hi-Co cards.
 func (d *Device) SetHiCo() error {
 	return d.sendAndCheck(esc('y'), false)
 }
 
+// IsHiCo checks the device's current write coercivity.
 func (d *Device) IsHiCo() (bool, error) {
-	err := d.send(esc('d'))
+	msg, err := d.sendAndReceive(esc('d'), false)
 	if err != nil {
 		return false, err
 	}
-	msg, err := d.receive(false)
-	if err != nil {
-		return false, err
-	}
-	switch msg[0] {
-	case 'H':
+	switch msg[1] {
+	case 'h':
 		return true, nil
-	case 'L':
+	case 'l':
 		return false, nil
 	}
-	return false, fmt.Errorf("unkown response %X", msg[0])
+	return false, fmt.Errorf("libmsr.Device.IsHiCo: unknown response %X", msg[1])
 }
 
+// SetBitsPerInch sets the density of each track in BPI.
 func (d *Device) SetBitsPerInch(t1, t2, t3 int) error {
-	invalidBPI := errors.New("invalid BPI")
+	invalidBPI := errors.New("libmsr.Device.SitBitsPerInch: invalid BPI")
 	cmd := esc('b')
 	switch t1 {
 	case 0:
@@ -194,10 +197,13 @@ func (d *Device) SetBitsPerInch(t1, t2, t3 int) error {
 	return d.sendAndCheck(cmd, false)
 }
 
+// SetBitsPerChar sets the number of bits (including parity) for each track.
 func (d *Device) SetBitsPerChar(t1, t2, t3 int) error {
 	return d.sendAndCheck(esc('o', byte(t1), byte(t2), byte(t3)), false)
 }
 
+// Erase clears the selected tracks on a card.
+// Does not return until a card is swiped or d.SwipeTimeout is reached.
 func (d *Device) Erase(t1, t2, t3 bool) error {
 	var mask byte
 	if t1 {
@@ -212,18 +218,28 @@ func (d *Device) Erase(t1, t2, t3 bool) error {
 	return d.sendAndCheck(esc('c', mask), true)
 }
 
+// WriteRawTracks writes raw data to a card.
+// Data can be encoded with EncodeRaw.
+// Does not return until a card is swiped or d.SwipeTimeout is reached.
 func (d *Device) WriteRawTracks(t1, t2, t3 []byte) error {
 	return d.sendAndCheck(append(esc('n'), encodeRawTracks(t1, t2, t3)...), true)
 }
 
+// WriteISOTracks writes ISO data to a card.
+// Does not return until a card is swiped or d.SwipeTimeout is reached.
 func (d *Device) WriteISOTracks(t1, t2, t3 []byte) error {
 	return d.sendAndCheck(append(esc('w'), encodeISOTracks(t1, t2, t3)...), true)
 }
 
+// ReadISOTracks reads ISO data from a card.
+// Does not return until a card is swiped or d.SwipeTimeout is reached.
 func (d *Device) ReadISOTracks() ([]byte, error) {
 	return d.sendAndReceive(esc('r'), true)
 }
 
+// WriteRawTracks reads raw data from a card.
+// Data can be decoded with DecodeRaw.
+// Does not return until a card is swiped or d.SwipeTimeout is reached.
 func (d *Device) ReadRawTracks() ([3][]byte, error) {
 	data, _, err := d.sendAndReceiveEncoded(esc('m'), true)
 	if err != nil {
@@ -232,27 +248,33 @@ func (d *Device) ReadRawTracks() ([3][]byte, error) {
 	return decodeTracks(data)
 }
 
+// Model returns the device's reported model.
 func (d *Device) Model() (string, error) {
 	msg, err := d.sendAndReceive(esc('t'), false)
 	return string(msg), err
 }
 
+// FirmwareVersion returns the device's reported firmware version.
 func (d *Device) FirmwareVersion() (string, error) {
 	msg, err := d.sendAndReceive(esc('v'), false)
 	return string(msg), err
 }
 
+// SetLED sets the device's LEDs to mode.
 func (d *Device) SetLED(mode LEDMode) error {
 	if mode > LEDRedOn {
-		return errors.New("invalid LED mode")
+		return errors.New("libmsr.Device.SetLED: invalid LED mode")
 	}
 	return d.send(esc(0x81 + byte(mode)))
 }
 
+// Reset resets the device.
+// Useful for cancelling timed-out operations.
 func (d *Device) Reset() error {
 	return d.send(esc('a'))
 }
 
+// Close resets and closes the USB device.
 func (d *Device) Close() error {
 	err := d.Reset()
 	if err != nil {

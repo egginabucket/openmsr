@@ -50,7 +50,7 @@ func parsePackets(pkts [][]byte) ([]byte, error) {
 	i := 0
 	for pktI, pkt := range pkts {
 		if pktI == 0 != (pkt[0]&seqStartBit == seqStartBit) {
-			return nil, errors.New("invalid start bit")
+			return nil, errors.New("libmsr.parsePackets: invalid start bit")
 		}
 		pktLen := int(pkt[0] & 63)
 		copy(msg[i:i+pktLen], pkt[1:1+pktLen])
@@ -99,12 +99,12 @@ func encodeISOTracks(t1, t2, t3 []byte) []byte {
 func decodeTracks(data []byte) ([3][]byte, error) {
 	var tracks [3][]byte
 	if data[0] != escByte || data[1] != 's' {
-		return tracks, errors.New("invalid track block start")
+		return tracks, errors.New("libmsr.decodeTracks: invalid track block start")
 	}
 	data = data[2:]
 	for i := 0; i < 3; i++ {
 		if data[0] != escByte || data[1] != byte(i+1) {
-			return tracks, errors.New("invalid track data")
+			return tracks, errors.New("libmsr.decodeTracks: invalid track data")
 		}
 		trackLen := int(data[2])
 		data = data[3:]
@@ -112,7 +112,7 @@ func decodeTracks(data []byte) ([3][]byte, error) {
 		data = data[trackLen:]
 	}
 	if data[0] != '?' || data[1] != fsByte {
-		return tracks, errors.New("invalid track block end")
+		return tracks, errors.New("libmsr.decodeTracks: invalid track block end")
 	}
 	return tracks, nil
 }
