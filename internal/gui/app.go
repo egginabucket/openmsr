@@ -1,7 +1,7 @@
 package gui
 
 import (
-	"io"
+	"fmt"
 	"sync"
 
 	"github.com/andlabs/ui"
@@ -29,11 +29,10 @@ const (
 type App struct {
 	device         *libmsr.Device
 	win            *ui.Window
-<<<<<<< HEAD
-	connCB         *ui.RadioButtons
-=======
+	connCB         *ui.Combobox
+	refreshButton  *ui.Button
+	availableDevs  []*usb.DeviceInfo
 	trackBox       *ui.Box
->>>>>>> 8e85deaa9a8b183064fac413fe57a05d5c0b1af0
 	presetRadio    *ui.RadioButtons
 	coRadio        *ui.RadioButtons
 	infoTypeCB     *ui.Combobox
@@ -65,19 +64,6 @@ func (a *App) throwErr(err error) {
 	}
 }
 
-func (a *App) selectPreset(r *ui.RadioButtons) {
-	preset := Preset(r.Selected())
-	switch preset {
-	case PresetAAMVA:
-		a.infoTypeCB.SetSelected(infoAAMVA)
-	case PresetISO:
-		a.infoTypeCB.SetSelected(infoIEC7813)
-	}
-	for _, t := range a.tracks {
-		t.setPreset(preset)
-	}
-}
-
 func (a *App) deviceControls() []ui.Control {
 	return []ui.Control{
 		a.presetRadio,
@@ -94,6 +80,64 @@ func (a *App) setDeviceAble(m bool) {
 	for _, c := range a.deviceControls() {
 		fn(c)
 	}
+}
+
+func (a *App) lookforDevices() {
+	a.availableDevs = make([]*usb.DeviceInfo, 0)
+	hids, err := usb.EnumerateHid(libmsr.VendorID, libmsr.ProductID)
+	if err != nil {
+		a.throwErr(err)
+		return
+	}
+	raws, err := usb.EnumerateRaw(libmsr.VendorID, libmsr.ProductID)
+	if err != nil {
+		a.throwErr(err)
+		return
+	}
+	a.availableDevs = make([]*usb.DeviceInfo, 0, len(hids)+len(raws))
+	for _, di := range hids {
+		a.availableDevs = append(a.availableDevs, &di)
+	}
+	for _, di := range raws {
+		a.availableDevs = append(a.availableDevs, &di)
+	}
+}
+
+func (a *App) selectDevice(cb *ui.Combobox) {
+	if a.device != nil {
+		a.disconnect()
+	}
+	if cb.Selected() == 0 {
+		return
+	}
+	d, err := a.availableDevs[cb.Selected()-1].Open()
+	if err != nil {
+		cb.SetSelected(0)
+		a.throwErr(err)
+		return
+	}
+	a.connect(d)
+}
+
+func (a *App) connect(d usb.Device) {
+	a.mu.Lock()
+	defer a.reset(nil)
+	defer a.mu.Unlock()
+	a.connCB.Disable()
+	a.setDeviceAble(true)
+	a.device = libmsr.NewDevice(d)
+}
+
+func (a *App) disconnect() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.connCB.SetSelected(connNone)
+	a.connCB.Enable()
+	a.setDeviceAble(false)
+	if err := a.device.Close(); err != nil {
+		a.throwErr(err)
+	}
+	a.device = nil
 }
 
 func (a *App) controls() []ui.Control {
@@ -120,12 +164,43 @@ func (a *App) unfreeze() {
 	a.mu.Unlock()
 }
 
-func (a *App) reset(b *ui.Button) {
+func (a *App) selectPreset(r *ui.RadioButtons) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	err := a.device.Reset()
+	preset := Preset(r.Selected())
+	switch preset {
+	case PresetAAMVA:
+		a.infoTypeCB.SetSelected(infoAAMVA)
+	case PresetISO:
+		a.infoTypeCB.SetSelected(infoIEC7813)
+	}
+	for _, t := range a.tracks {
+		t.setPreset(preset)
+	}
+}
+
+func (a *App) setDefaults() {
+	a.presetRadio.SetSelected(int(PresetISO))
+	a.selectPreset(a.presetRadio)
+	a.infoTypeCB.SetSelected(infoIEC7813)
+}
+
+func (a *App) reset(*ui.Button) {
+	a.mu.Lock()
+	defer a.setDefaults()
+	defer a.mu.Unlock()
+	if err := a.device.Reset(); err != nil {
+		a.throwErr(err)
+	}
+	isHiCo, err := a.device.IsHiCo()
 	if err != nil {
 		a.throwErr(err)
+	} else {
+		if isHiCo {
+			a.coRadio.SetSelected(hiCo)
+		} else {
+			a.coRadio.SetSelected(loCo)
+		}
 	}
 }
 
@@ -179,15 +254,19 @@ func (a *App) erase() {
 func (a *App) setCoercivity(r *ui.RadioButtons) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	var err error
 	switch r.Selected() {
 	case hiCo:
-		a.device.SetHiCo()
+		err = a.device.SetHiCo()
 	case loCo:
-		a.device.SetLoCo()
+		err = a.device.SetLoCo()
+	}
+	if err != nil {
+		a.throwErr(err)
 	}
 }
 
-func (a *App) showInfo(b *ui.Button) {
+func (a *App) showInfo(*ui.Button) {
 	var in libtracks.Informer
 	var err error
 	switch a.infoTypeCB.Selected() {
@@ -214,30 +293,31 @@ func (a *App) showInfo(b *ui.Button) {
 	win.Show()
 }
 
-func (a *App) openFile(b *ui.Button) {
-	if path := ui.OpenFile(a.win); path != "" {
-		a.throwErr(io.EOF)
+func (a *App) openFile(*ui.Button) {
+	path := ui.OpenFile(a.win)
+	if path == "" {
+		return
 	}
 }
 
 func (a *App) saveFile(b *ui.Button) {
-	if path := ui.SaveFile(a.win); path != "" {
-		a.throwErr(io.EOF)
+	path := ui.SaveFile(a.win)
+	if path == "" {
+		return
 	}
+}
+
+func (a *App) onClosing(*ui.Window) bool {
+	if a.device != nil {
+		a.device.Close()
+	}
+	return true
 }
 
 func MakeMainUI(win *ui.Window) ui.Control {
 	var a App
 	a.win = win
-	hids, err := usb.EnumerateHid(libmsr.VendorID, libmsr.ProductID)
-	if err != nil {
-		panic(err)
-	}
-	hid, err := hids[0].Open()
-	if err != nil {
-		panic(err)
-	}
-	a.device = libmsr.NewDevice(hid)
+	a.win.OnClosing(a.onClosing)
 	vBox := ui.NewVerticalBox()
 	vBox.SetPadded(true)
 	hBox := ui.NewHorizontalBox()
@@ -253,37 +333,28 @@ func MakeMainUI(win *ui.Window) ui.Control {
 	sideMenu := ui.NewVerticalBox()
 	sideMenu.SetPadded(true)
 	//sideForm := ui.NewForm()
-	connectionCB := ui.NewCombobox()
-	connectionCB.Append("MSR605X (HID)")
-	connectionCB.Append("Disconnected")
-	connectionCB.Append("MSR605 (Raw)")
-	connectionCB.SetSelected(connHID)
+	a.connCB = ui.NewCombobox()
+	a.connCB.Append("Disconnected")
+	a.connCB.Append("MSR605X (HID)")
+	a.connCB.Append("MSR605 (Raw)")
+	a.refreshButton = ui.NewButton("Refresh")
+	//a.refreshButton.OnClicked()
 	a.coRadio = ui.NewRadioButtons()
 	a.coRadio.Append("Hi-Co")
 	a.coRadio.Append("Lo-Co")
-	isHiCo, err := a.device.IsHiCo()
-	if err != nil {
-		panic(err)
-	}
-	if isHiCo {
-		a.coRadio.SetSelected(hiCo)
-	} else {
-		a.coRadio.SetSelected(loCo)
-	}
 
 	a.coRadio.OnSelected(a.setCoercivity)
 	a.presetRadio = ui.NewRadioButtons()
 	a.presetRadio.Append("ISO")
 	a.presetRadio.Append("AAMVA")
-	a.presetRadio.SetSelected(int(PresetISO))
 	a.presetRadio.OnSelected(a.selectPreset)
 	a.infoTypeCB = ui.NewCombobox()
 	a.infoTypeCB.Append("ISO/IEC 7813")
 	a.infoTypeCB.Append("AAMVA DL")
-	a.infoTypeCB.SetSelected(infoIEC7813)
 	a.showInfoButton = ui.NewButton("Show info")
 	a.showInfoButton.OnClicked(a.showInfo)
-
+	sideMenu.Append(a.connCB, false)
+	sideMenu.Append(a.refreshButton, false)
 	sideMenu.Append(a.coRadio, false)
 	sideMenu.Append(a.presetRadio, false)
 	sideMenu.Append(a.infoTypeCB, false)
@@ -322,7 +393,24 @@ func MakeMainUI(win *ui.Window) ui.Control {
 	hBox.Append(sideMenu, false)
 	hBox.Append(a.trackBox, true)
 
-	a.selectPreset(a.presetRadio)
-	//a.setFrozen(true)
+	a.setDeviceAble(false)
+	a.setDefaults()
+	a.connCB.SetSelected(connNone)
+	hids, err := usb.EnumerateHid(libmsr.VendorID, libmsr.ProductID)
+	if err != nil {
+		panic(err)
+	}
+	if len(hids) > 0 {
+		hid, err := hids[0].Open()
+		if err != nil {
+			panic(err)
+		}
+		a.device = libmsr.NewDevice(hid)
+		a.connCB.SetSelected(connNone)
+		fmt.Println("connecting")
+		a.connect(hid)
+		fmt.Println("connected")
+	}
+
 	return vBox
 }

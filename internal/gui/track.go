@@ -184,9 +184,9 @@ func newTrack(num int) *Track {
 	var t Track
 	t.num = num
 	vbox := ui.NewVerticalBox()
-	//vbox.SetPadded(false)
+	vbox.SetPadded(true)
 	hbox := ui.NewHorizontalBox()
-	//hbox.SetPadded(true)
+	hbox.SetPadded(true)
 
 	t.enableCB = ui.NewCheckbox(fmt.Sprintf("Track %d", t.num))
 	t.enableCB.SetChecked(true)
