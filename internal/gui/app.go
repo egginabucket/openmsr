@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/andlabs/ui"
@@ -29,7 +28,7 @@ const (
 type App struct {
 	device         *libmsr.Device
 	win            *ui.Window
-	connCB         *ui.Combobox
+	deviceCB       *ui.Combobox
 	refreshButton  *ui.Button
 	availableDevs  []*usb.DeviceInfo
 	trackBox       *ui.Box
@@ -83,7 +82,7 @@ func (a *App) setDeviceAble(m bool) {
 }
 
 func (a *App) lookforDevices() {
-	a.availableDevs = make([]*usb.DeviceInfo, 0)
+	//a.availableDevs = make([]*usb.DeviceInfo, 0)
 	hids, err := usb.EnumerateHid(libmsr.VendorID, libmsr.ProductID)
 	if err != nil {
 		a.throwErr(err)
@@ -94,12 +93,16 @@ func (a *App) lookforDevices() {
 		a.throwErr(err)
 		return
 	}
-	a.availableDevs = make([]*usb.DeviceInfo, 0, len(hids)+len(raws))
+	newDevs := make([]*usb.DeviceInfo, 0, len(hids)+len(raws))
 	for _, di := range hids {
-		a.availableDevs = append(a.availableDevs, &di)
+		newDevs = append(newDevs, &di)
 	}
 	for _, di := range raws {
-		a.availableDevs = append(a.availableDevs, &di)
+		newDevs = append(newDevs, &di)
+	}
+	a.availableDevs = append(a.availableDevs, newDevs...)
+	for _, d := range newDevs {
+		a.deviceCB.Append(d.Product)
 	}
 }
 
@@ -108,7 +111,7 @@ func (a *App) selectDevice(cb *ui.Combobox) {
 		a.disconnect()
 	}
 	if cb.Selected() == 0 {
-		return
+		return // already disconnected
 	}
 	d, err := a.availableDevs[cb.Selected()-1].Open()
 	if err != nil {
@@ -123,7 +126,7 @@ func (a *App) connect(d usb.Device) {
 	a.mu.Lock()
 	defer a.reset(nil)
 	defer a.mu.Unlock()
-	a.connCB.Disable()
+	a.deviceCB.Disable()
 	a.setDeviceAble(true)
 	a.device = libmsr.NewDevice(d)
 }
@@ -131,8 +134,8 @@ func (a *App) connect(d usb.Device) {
 func (a *App) disconnect() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.connCB.SetSelected(connNone)
-	a.connCB.Enable()
+	a.deviceCB.SetSelected(connNone)
+	a.deviceCB.Enable()
 	a.setDeviceAble(false)
 	if err := a.device.Close(); err != nil {
 		a.throwErr(err)
@@ -333,12 +336,11 @@ func MakeMainUI(win *ui.Window) ui.Control {
 	sideMenu := ui.NewVerticalBox()
 	sideMenu.SetPadded(true)
 	//sideForm := ui.NewForm()
-	a.connCB = ui.NewCombobox()
-	a.connCB.Append("Disconnected")
-	a.connCB.Append("MSR605X (HID)")
-	a.connCB.Append("MSR605 (Raw)")
+	a.deviceCB = ui.NewCombobox()
+	a.deviceCB.Append("Disconnected")
+	a.deviceCB.OnSelected(a.selectDevice)
 	a.refreshButton = ui.NewButton("Refresh")
-	//a.refreshButton.OnClicked()
+	a.refreshButton.OnClicked(func(*ui.Button) { a.lookforDevices() })
 	a.coRadio = ui.NewRadioButtons()
 	a.coRadio.Append("Hi-Co")
 	a.coRadio.Append("Lo-Co")
@@ -353,7 +355,7 @@ func MakeMainUI(win *ui.Window) ui.Control {
 	a.infoTypeCB.Append("AAMVA DL")
 	a.showInfoButton = ui.NewButton("Show info")
 	a.showInfoButton.OnClicked(a.showInfo)
-	sideMenu.Append(a.connCB, false)
+	sideMenu.Append(a.deviceCB, false)
 	sideMenu.Append(a.refreshButton, false)
 	sideMenu.Append(a.coRadio, false)
 	sideMenu.Append(a.presetRadio, false)
@@ -395,22 +397,15 @@ func MakeMainUI(win *ui.Window) ui.Control {
 
 	a.setDeviceAble(false)
 	a.setDefaults()
-	a.connCB.SetSelected(connNone)
-	hids, err := usb.EnumerateHid(libmsr.VendorID, libmsr.ProductID)
-	if err != nil {
-		panic(err)
-	}
-	if len(hids) > 0 {
-		hid, err := hids[0].Open()
-		if err != nil {
-			panic(err)
+	a.deviceCB.SetSelected(connNone)
+	a.lookforDevices()
+	if len(a.availableDevs) > 0 {
+		d, err := a.availableDevs[0].Open()
+		if err == nil {
+			a.device = libmsr.NewDevice(d)
+			a.deviceCB.SetSelected(1)
+			a.connect(d)
 		}
-		a.device = libmsr.NewDevice(hid)
-		a.connCB.SetSelected(connNone)
-		fmt.Println("connecting")
-		a.connect(hid)
-		fmt.Println("connected")
 	}
-
 	return vBox
 }
