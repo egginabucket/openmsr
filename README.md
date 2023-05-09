@@ -11,7 +11,7 @@ which are great if you want to develop your own applications / commands.
 - Read, write (WIP), and erase on individual tracks
 - BPI, BPC, and parity selection for each track
 - IEC 7813 and AAMVA parsing with Luhn validation
-- Hi/lo coercitivity selection
+- Hi-co / lo-co selection
 
 ## Installation
 
@@ -28,6 +28,7 @@ An executable should appear in a `bin` folder.
 To run without root privileges, Linux users need to add a udev rule:
 
 `# cp 50-msr605x.rules /etc/udev/rules.d/`
+
 `# udevadm control --reload-rules && udevadm trigger`
 
 To use the MSR605, make sure your user has access to the serial ports
