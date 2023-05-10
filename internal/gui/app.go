@@ -126,7 +126,6 @@ func (a *App) connect(d usb.Device) {
 	a.mu.Lock()
 	defer a.reset(nil)
 	defer a.mu.Unlock()
-	a.deviceCB.Disable()
 	a.setDeviceAble(true)
 	a.device = libmsr.NewDevice(d)
 }
@@ -135,7 +134,6 @@ func (a *App) disconnect() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.deviceCB.SetSelected(connNone)
-	a.deviceCB.Enable()
 	a.setDeviceAble(false)
 	if err := a.device.Close(); err != nil {
 		a.throwErr(err)
@@ -144,7 +142,13 @@ func (a *App) disconnect() {
 }
 
 func (a *App) controls() []ui.Control {
-	return append(a.deviceControls(), a.openButton, a.saveButton)
+	return append(a.deviceControls(),
+		a.deviceCB,
+		a.refreshButton,
+		a.openButton,
+		a.saveButton,
+		a.trackBox,
+	)
 }
 
 func (a *App) setFrozen(f bool) {
@@ -152,7 +156,6 @@ func (a *App) setFrozen(f bool) {
 	for _, c := range a.controls() {
 		fn(c)
 	}
-	fn(a.trackBox)
 }
 
 func (a *App) freeze() {
@@ -222,6 +225,21 @@ func (a *App) read() {
 }
 
 func (a *App) write() {
+	a.freeze()
+	defer a.unfreeze()
+	var tracks [3][]byte
+	for i, track := range a.tracks {
+		if !track.disabled {
+			tracks[i] = []byte(track.edit.Text())
+		}
+	}
+	err := a.device.WriteISOTracks(tracks[0], tracks[1], tracks[2])
+	if err != nil {
+		a.throwErr(err)
+	}
+}
+
+func (a *App) writeRaw() {
 	a.freeze()
 	defer a.unfreeze()
 	var rawTracks [3][]byte
